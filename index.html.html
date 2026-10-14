@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Beehive Animal Feed Ltd — Sales Forecast & CAC Executive Dashboard</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+
+  <!-- TOP APP BAR -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xl border border-amber-500/30">
+          🌾
+        </div>
+        <div>
+          <h1 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+            Beehive Animal Feed Ltd 
+            <span class="text-xs bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">Adepa Feed</span>
+          </h1>
+          <p class="text-xs text-slate-400">Collaboration Portal • Real-time Sales, Overheads & CAC</p>
+        </div>
+      </div>
+
+      <!-- Header Actions: Currency & Sync Status -->
+      <div class="flex items-center gap-3">
+        <!-- Currency Toggle -->
+        <div class="flex items-center bg-slate-800 rounded-lg p-1 border border-slate-700 text-xs font-semibold">
+          <button id="btn-currency-ghs" onclick="setCurrency('GHS')" class="px-2.5 py-1 rounded bg-amber-500 text-slate-950 transition">GHS (₵)</button>
+          <button id="btn-currency-usd" onclick="setCurrency('USD')" class="px-2.5 py-1 rounded text-slate-400 hover:text-white transition">USD ($)</button>
+        </div>
+
+        <!-- Sync Indicator -->
+        <div id="sync-badge" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span id="sync-text">Live Sync</span>
+        </div>
+
+        <!-- Firebase Config Modal Trigger -->
+        <button onclick="toggleModal('fb-modal')" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition" title="Database Settings">
+          <i data-lucide="settings" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+
+    <!-- HORIZONTAL CONTROLS & TIMEFRAME SELECTOR -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-800/40 p-4 rounded-2xl border border-slate-800">
+      <div>
+        <h2 class="text-sm font-semibold text-slate-300">Target Forecast Benchmark</h2>
+        <p class="text-xs text-slate-400">Select model projection tier from "Making feed" Sheet</p>
+      </div>
+      <div class="flex flex-wrap gap-2" id="year-selectors">
+        <button onclick="setYear(1)" class="year-btn px-3 py-1.5 rounded-lg text-xs font-bold transition bg-amber-500 text-slate-950" data-year="1">Year 1 (6k bags)</button>
+        <button onclick="setYear(2)" class="year-btn px-3 py-1.5 rounded-lg text-xs font-bold transition bg-slate-800 text-slate-300 hover:bg-slate-700" data-year="2">Year 2 (12k bags)</button>
+        <button onclick="setYear(3)" class="year-btn px-3 py-1.5 rounded-lg text-xs font-bold transition bg-slate-800 text-slate-300 hover:bg-slate-700" data-year="3">Year 3 (48k bags)</button>
+        <button onclick="setYear(4)" class="year-btn px-3 py-1.5 rounded-lg text-xs font-bold transition bg-slate-800 text-slate-300 hover:bg-slate-700" data-year="4">Year 4 (240k bags)</button>
+        <button onclick="setYear(5)" class="year-btn px-3 py-1.5 rounded-lg text-xs font-bold transition bg-slate-800 text-slate-300 hover:bg-slate-700" data-year="5">Year 5 (480k bags)</button>
+      </div>
+    </div>
+
+    <!-- 4 EXECUTIVE KPI CARDS -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      
+      <!-- Card 1: Forecast Sales -->
+      <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 relative overflow-hidden">
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-xs font-medium uppercase tracking-wider">Annual Forecast</span>
+          <i data-lucide="trending-up" class="w-4 h-4 text-amber-400"></i>
+        </div>
+        <div class="text-2xl font-extrabold text-white" id="kpi-forecast">₵0.00</div>
+        <p class="text-xs text-slate-400 mt-1" id="kpi-forecast-sub">Target Volume: 6,000 bags</p>
+      </div>
+
+      <!-- Card 2: Actual Sales -->
+      <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 relative overflow-hidden">
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-xs font-medium uppercase tracking-wider">Actual Logged Sales</span>
+          <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400"></i>
+        </div>
+        <div class="text-2xl font-extrabold text-white" id="kpi-actual">₵0.00</div>
+        <div class="flex items-center gap-1.5 mt-1">
+          <span id="kpi-target-pct" class="text-xs font-semibold text-emerald-400">0.0%</span>
+          <span class="text-xs text-slate-400">of annual target</span>
+        </div>
+      </div>
+
+      <!-- Card 3: Total Spends (Overhead) -->
+      <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 relative overflow-hidden">
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-xs font-medium uppercase tracking-wider">Total Commercial Spend</span>
+          <i data-lucide="wallet" class="w-4 h-4 text-sky-400"></i>
+        </div>
+        <div class="text-2xl font-extrabold text-white" id="kpi-spends">₵0.00</div>
+        <p class="text-xs text-slate-400 mt-1">Transport, Delivery, Security, IT</p>
+      </div>
+
+      <!-- Card 4: Cost of Customer Acquisition (CAC) -->
+      <div class="bg-slate-800/60 p-5 rounded-2xl border border-slate-700/60 relative overflow-hidden">
+        <div class="flex items-center justify-between text-slate-400 mb-2">
+          <span class="text-xs font-medium uppercase tracking-wider">Blended CAC</span>
+          <i data-lucide="users" class="w-4 h-4 text-rose-400"></i>
+        </div>
+        <div class="text-2xl font-extrabold text-white" id="kpi-cac">₵0.00</div>
+        <p class="text-xs text-slate-400 mt-1" id="kpi-cac-sub">Based on 0 acquired customers</p>
+      </div>
+
+    </div>
+
+    <!-- CHARTS SECTION -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- Chart 1: Forecast vs Actual by Feed Category (2 Cols) -->
+      <div class="lg:col-span-2 bg-slate-800/50 p-6 rounded-2xl border border-slate-800">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h3 class="text-sm font-bold text-white">Sales: Forecast vs Actual by Category</h3>
+            <p class="text-xs text-slate-400">Real production pricing from "Making feed" model</p>
+          </div>
+          <span class="text-xs bg-slate-700/60 text-slate-300 px-2.5 py-1 rounded-md border border-slate-600">15kg Standard Bag</span>
+        </div>
+        <div class="h-72 w-full">
+          <canvas id="categorySalesChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 2: Overhead Spends Breakdown (1 Col) -->
+      <div class="bg-slate-800/50 p-6 rounded-2xl border border-slate-800 flex flex-col justify-between">
+        <div>
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold text-white">Overhead & Acquisition Spend</h3>
+            <span class="text-xs text-slate-400">Cost Distribution</span>
+          </div>
+          <div class="h-56 w-full flex items-center justify-center">
+            <canvas id="spendsDoughnutChart"></canvas>
+          </div>
+        </div>
+        <!-- Mini breakdown labels -->
+        <div class="grid grid-cols-2 gap-2 mt-4 text-xs pt-4 border-t border-slate-700/50">
+          <div><span class="text-slate-400">Transport:</span> <span id="lbl-transport" class="font-bold text-white">₵0</span></div>
+          <div><span class="text-slate-400">Delivery:</span> <span id="lbl-delivery" class="font-bold text-white">₵0</span></div>
+          <div><span class="text-slate-400">Security:</span> <span id="lbl-security" class="font-bold text-white">₵0</span></div>
+          <div><span class="text-slate-400">IT Maint.:</span> <span id="lbl-it" class="font-bold text-white">₵0</span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- PRODUCTION UNIT ECONOMICS BENCHMARK (From "Making feed" tab) -->
+    <div class="bg-slate-800/40 rounded-2xl border border-slate-800 overflow-hidden">
+      <div class="p-4 sm:p-6 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+        <div>
+          <h3 class="text-sm font-bold text-white">Official Unit Economics & Pricing Matrix</h3>
+          <p class="text-xs text-slate-400">Calibrated from "Making feed" quote ref BH-AF-2026-014 (15kg Unit)</p>
+        </div>
+        <div class="text-xs text-amber-400 bg-amber-500/10 px-3 py-1 rounded-lg border border-amber-500/20">
+          Utility Overhead: ₵10 Electricity + ₵10 Water + ₵10 Labor Included
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-800/70 text-slate-400 uppercase font-semibold">
+            <tr>
+              <th class="py-3 px-4">Feed Category</th>
+              <th class="py-3 px-4">Ingredients Cost</th>
+              <th class="py-3 px-4">Production COGS</th>
+              <th class="py-3 px-4">Catalog Price (0% Disc)</th>
+              <th class="py-3 px-4">Loyalty Selling Price</th>
+              <th class="py-3 px-4">Gross Margin / Unit</th>
+              <th class="py-3 px-4">Markup %</th>
+            </tr>
+          </thead>
+          <tbody id="unit-economics-body" class="divide-y divide-slate-800 font-medium">
+            <!-- Rendered by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- COLLABORATION LOGGING: 2 COLUMN FORMS -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+      <!-- Form 1: Log Actual Sales -->
+      <div class="bg-slate-800/50 p-6 rounded-2xl border border-slate-800">
+        <div class="flex items-center gap-2 mb-4">
+          <div class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400">
+            <i data-lucide="shopping-cart" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white">Log Actual Feed Sale</h3>
+            <p class="text-xs text-slate-400">Record a confirmed customer order</p>
+          </div>
+        </div>
+
+        <form id="sale-form" onsubmit="handleSaleSubmit(event)" class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Customer / Farm Name</label>
+              <input type="text" id="sale-customer" required placeholder="e.g. Prof Bright / Martin Farms" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Customer Type</label>
+              <select id="sale-is-new" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500">
+                <option value="true">New Customer (Affects CAC)</option>
+                <option value="false">Returning Customer</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Feed Category</label>
+              <select id="sale-category" onchange="autoFillPrice()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500">
+                <option value="Pig Feed">Pig Feed</option>
+                <option value="Livestock Feed">Livestock Feed</option>
+                <option value="Rabbit Feed">Rabbit Feed</option>
+                <option value="Layer Feed">Layer Feed</option>
+                <option value="Broiler Feed">Broiler Feed</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Bags Sold (15kg ea)</label>
+              <input type="number" id="sale-qty" min="1" value="10" required oninput="calculateSaleTotal()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Unit Price (<span class="currency-label">GHS</span>)</label>
+              <input type="number" step="0.01" id="sale-price" required oninput="calculateSaleTotal()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Total Line Value</label>
+              <div id="sale-total-preview" class="w-full bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold text-amber-400">₵0.00</div>
+            </div>
+          </div>
+
+          <button type="submit" class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-2.5 rounded-lg text-xs transition flex items-center justify-center gap-2">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i> Add Verified Sale
+          </button>
+        </form>
+      </div>
+
+      <!-- Form 2: Log Overhead Spends -->
+      <div class="bg-slate-800/50 p-6 rounded-2xl border border-slate-800">
+        <div class="flex items-center gap-2 mb-4">
+          <div class="p-2 rounded-lg bg-sky-500/10 text-sky-400">
+            <i data-lucide="truck" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white">Log Operational & Overhead Spend</h3>
+            <p class="text-xs text-slate-400">Directly impacts CAC and operational margin</p>
+          </div>
+        </div>
+
+        <form id="spend-form" onsubmit="handleSpendSubmit(event)" class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Spend Category</label>
+              <select id="spend-category" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500">
+                <option value="Transportation spend">Transportation spend</option>
+                <option value="Delivery spend">Delivery spend</option>
+                <option value="Physical security spend">Physical security spend</option>
+                <option value="IT maintenance spend">IT maintenance spend</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-400 mb-1">Amount (<span class="currency-label">GHS</span>)</label>
+              <input type="number" step="0.01" id="spend-amount" min="1" required placeholder="0.00" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1">Notes / Vendor Reference</label>
+            <input type="text" id="spend-notes" placeholder="e.g. Bulk grain transport haulage / Server subscription" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500" />
+          </div>
+
+          <button type="submit" class="w-full bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold py-2.5 rounded-lg text-xs transition flex items-center justify-center gap-2">
+            <i data-lucide="dollar-sign" class="w-4 h-4"></i> Record Overhead Spend
+          </button>
+        </form>
+      </div>
+
+    </div>
+
+    <!-- RECENT TRANSACTIONS TABLE -->
+    <div class="bg-slate-800/40 rounded-2xl border border-slate-800 overflow-hidden">
+      <div class="p-4 border-b border-slate-800 flex justify-between items-center">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <i data-lucide="history" class="w-4 h-4 text-slate-400"></i> Collaboration Activity Log
+        </h3>
+        <button onclick="clearDemoData()" class="text-xs text-rose-400 hover:text-rose-300">Reset Log</button>
+      </div>
+      <div class="overflow-x-auto max-h-64">
+        <table class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-slate-800/70 text-slate-400 uppercase font-semibold sticky top-0">
+            <tr>
+              <th class="py-2.5 px-4">Time</th>
+              <th class="py-2.5 px-4">Type</th>
+              <th class="py-2.5 px-4">Description / Entity</th>
+              <th class="py-2.5 px-4">Category</th>
+              <th class="py-2.5 px-4 text-right">Value</th>
+            </tr>
+          </thead>
+          <tbody id="activity-log-body" class="divide-y divide-slate-800 font-normal">
+            <!-- Populated via JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- FIREBASE SETTINGS MODAL -->
+  <div id="fb-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i data-lucide="database" class="w-5 h-5 text-amber-400"></i> Real-time Team Sync
+        </h3>
+        <button onclick="toggleModal('fb-modal')" class="text-slate-400 hover:text-white">✕</button>
+      </div>
+      <p class="text-xs text-slate-400">
+        To collaborate with team members across different machines, enter your Firebase Realtime Database config below. Otherwise, changes save locally in your browser.
+      </p>
+      <div>
+        <label class="block text-xs font-semibold text-slate-300 mb-1">Firebase Config JSON</label>
+        <textarea id="fb-config-input" rows="5" class="w-full bg-slate-950 font-mono text-xs text-slate-300 p-2.5 rounded-lg border border-slate-800 focus:outline-none focus:border-amber-500" placeholder='{ "apiKey": "...", "databaseURL": "..." }'></textarea>
+      </div>
+      <div class="flex justify-end gap-2">
+        <button onclick="toggleModal('fb-modal')" class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-400 hover:bg-slate-800">Close</button>
+        <button onclick="saveFirebaseConfig()" class="px-4 py-2 rounded-lg text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-slate-950">Save & Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EMBEDDED REAL DATA & APPLICATION ENGINE -->
+  <script>
+    // 1. MASTER DATA EXACTLY FROM "MAKING FEED" TAB
+    const USD_TO_GHS = 11.6566;
+
+    const PRODUCT_SPECS = {
+      'Pig Feed': {
+        ingredientCost: 173.00,
+        overheadCost: 30.00, // 10 Elec + 10 Water + 10 Labor
+        cogs: 203.00,
+        regularPrice: 375.00,
+        sellingPrice: 325.85,
+        margin: 122.85,
+        marginPct: 60.52
+      },
+      'Livestock Feed': {
+        ingredientCost: 173.00,
+        overheadCost: 30.00,
+        cogs: 203.00,
+        regularPrice: 375.00,
+        sellingPrice: 325.85,
+        margin: 122.85,
+        marginPct: 60.52
+      },
+      'Broiler Feed': {
+        ingredientCost: 183.00,
+        overheadCost: 30.00,
+        cogs: 213.00,
+        regularPrice: 400.00,
+        sellingPrice: 348.38,
+        margin: 135.38,
+        marginPct: 63.56
+      },
+      'Layer Feed': {
+        ingredientCost: 203.00,
+        overheadCost: 30.00,
+        cogs: 233.00,
+        regularPrice: 400.00,
+        sellingPrice: 347.65,
+        margin: 114.65,
+        marginPct: 49.21
+      },
+      'Rabbit Feed': {
+        ingredientCost: 203.00,
+        overheadCost: 30.00,
+        cogs: 233.00,
+        regularPrice: 375.00,
+        sellingPrice: 326.36,
+        margin: 93.36,
+        marginPct: 40.07
+      }
+    };
+
+    // 5-Year Forecast Benchmark Models from Sheet Rows 80-133
+    const YEAR_BENCHMARKS = {
+      1: { bagsPerMonthPerCat: 100, annualTotalRevGHS: 2008901.34, totalAnnualBags: 6000 },
+      2: { bagsPerMonthPerCat: 200, annualTotalRevGHS: 4017802.68, totalAnnualBags: 12000 },
+      3: { bagsPerMonthPerCat: 800, annualTotalRevGHS: 16071210.72, totalAnnualBags: 48000 },
+      4: { bagsPerMonthPerCat: 4000, annualTotalRevGHS: 80356053.60, totalAnnualBags: 240000 },
+      5: { bagsPerMonthPerCat: 8000, annualTotalRevGHS: 160712107.20, totalAnnualBags: 480000 }
+    };
+
+    // Application State
+    let currentCurrency = 'GHS';
+    let selectedYear = 1;
+
+    let appData = {
+      sales: [
+        // Seeded with real verified tracker transactions from sheet
+        { id: 's1', timestamp: new Date().toISOString(), customer: 'Prof Bright', category: 'Pig Feed', qty: 2, unitPrice: 325.85, total: 651.70, isNew: true },
+        { id: 's2', timestamp: new Date().toISOString(), customer: 'Gyabaah Farms', category: 'Broiler Feed', qty: 3, unitPrice: 348.38, total: 1045.14, isNew: true },
+        { id: 's3', timestamp: new Date().toISOString(), customer: 'Seven Fold Farms', category: 'Layer Feed', qty: 7, unitPrice: 347.65, total: 2433.55, isNew: false }
+      ],
+      spends: {
+        'Transportation spend': 1450.00,
+        'Delivery spend': 820.00,
+        'Physical security spend': 600.00,
+        'IT maintenance spend': 420.00
+      },
+      activityLog: []
+    };
+
+    let salesChartInstance = null;
+    let spendsChartInstance = null;
+    let fbDb = null;
+
+    // 2. INITIALIZATION
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      initFirebase();
+      loadLocalState();
+      renderUnitEconomicsTable();
+      autoFillPrice();
+      refreshDashboard();
+    });
+
+    // 3. CURRENCY & FORMATTING HELPERS
+    function setCurrency(cur) {
+      currentCurrency = cur;
+      document.getElementById('btn-currency-ghs').className = cur === 'GHS' 
+        ? 'px-2.5 py-1 rounded bg-amber-500 text-slate-950 transition' 
+        : 'px-2.5 py-1 rounded text-slate-400 hover:text-white transition';
+      document.getElementById('btn-currency-usd').className = cur === 'USD' 
+        ? 'px-2.5 py-1 rounded bg-amber-500 text-slate-950 transition' 
+        : 'px-2.5 py-1 rounded text-slate-400 hover:text-white transition';
+
+      document.querySelectorAll('.currency-label').forEach(el => el.textContent = cur);
+      autoFillPrice();
+      refreshDashboard();
+    }
+
+    function formatVal(amountInGHS) {
+      const isUSD = currentCurrency === 'USD';
+      const val = isUSD ? amountInGHS / USD_TO_GHS : amountInGHS;
+      const symbol = isUSD ? '$' : '₵';
+      return symbol + Number(val).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function setYear(yr) {
+      selectedYear = yr;
+      document.querySelectorAll('.year-btn').forEach(b => {
+        if (parseInt(b.getAttribute('data-year')) === yr) {
+          b.className = 'year-btn px-3 py-1.5 rounded-lg text-xs font-bold transition bg-amber-500 text-slate-950';
+        } else {
+          b.className = 'year-btn px-3 py-1.5 rounded-lg text-xs font-bold transition bg-slate-800 text-slate-300 hover:bg-slate-700';
+        }
+      });
+      refreshDashboard();
+    }
+
+    // 4. RENDERING ENGINE
+    function refreshDashboard() {
+      const benchmark = YEAR_BENCHMARKS[selectedYear];
+      
+      // Calculate Total Actual Sales
+      const totalActualGHS = appData.sales.reduce((sum, item) => sum + (item.total || 0), 0);
+      const totalForecastGHS = benchmark.annualTotalRevGHS;
+      const forecastPct = totalForecastGHS > 0 ? ((totalActualGHS / totalForecastGHS) * 100).toFixed(2) : 0;
+
+      // Calculate Total Spends
+      const totalSpendsGHS = Object.values(appData.spends).reduce((sum, v) => sum + v, 0);
+
+      // Calculate CAC: Total Commercial Overhead / Acquired New Customers
+      const newCustomersCount = appData.sales.filter(s => s.isNew).length;
+      const cacGHS = newCustomersCount > 0 ? (totalSpendsGHS / newCustomersCount) : totalSpendsGHS;
+
+      // Update KPI Cards
+      document.getElementById('kpi-forecast').textContent = formatVal(totalForecastGHS);
+      document.getElementById('kpi-forecast-sub').textContent = `Target: ${benchmark.totalAnnualBags.toLocaleString()} bags/yr`;
+
+      document.getElementById('kpi-actual').textContent = formatVal(totalActualGHS);
+      document.getElementById('kpi-target-pct').textContent = `${forecastPct}%`;
+
+      document.getElementById('kpi-spends').textContent = formatVal(totalSpendsGHS);
+
+      document.getElementById('kpi-cac').textContent = formatVal(cacGHS);
+      document.getElementById('kpi-cac-sub').textContent = `Over ${newCustomersCount} new acquired farm account${newCustomersCount === 1 ? '' : 's'}`;
+
+      // Update spends breakdown text
+      document.getElementById('lbl-transport').textContent = formatVal(appData.spends['Transportation spend'] || 0);
+      document.getElementById('lbl-delivery').textContent = formatVal(appData.spends['Delivery spend'] || 0);
+      document.getElementById('lbl-security').textContent = formatVal(appData.spends['Physical security spend'] || 0);
+      document.getElementById('lbl-it').textContent = formatVal(appData.spends['IT maintenance spend'] || 0);
+
+      updateCharts();
+      renderActivityLog();
+    }
+
+    function renderUnitEconomicsTable() {
+      const tbody = document.getElementById('unit-economics-body');
+      tbody.innerHTML = '';
+      Object.keys(PRODUCT_SPECS).forEach(cat => {
+        const p = PRODUCT_SPECS[cat];
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/50 transition';
+        tr.innerHTML = `
+          <td class="py-3 px-4 font-bold text-white">${cat}</td>
+          <td class="py-3 px-4">₵${p.ingredientCost.toFixed(2)}</td>
+          <td class="py-3 px-4 text-sky-400 font-semibold">₵${p.cogs.toFixed(2)}</td>
+          <td class="py-3 px-4 line-through text-slate-500">₵${p.regularPrice.toFixed(2)}</td>
+          <td class="py-3 px-4 font-bold text-amber-400">₵${p.sellingPrice.toFixed(2)} <span class="text-[10px] text-slate-400 font-normal">($${(p.sellingPrice/USD_TO_GHS).toFixed(2)})</span></td>
+          <td class="py-3 px-4 text-emerald-400 font-semibold">+₵${p.margin.toFixed(2)}</td>
+          <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 font-bold">${p.marginPct.toFixed(1)}%</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function updateCharts() {
+      const categories = ['Pig Feed', 'Livestock Feed', 'Broiler Feed', 'Layer Feed', 'Rabbit Feed'];
+      const benchmark = YEAR_BENCHMARKS[selectedYear];
+
+      // Model forecast per category per year: 12 months * monthly bags * unit price
+      const forecastData = categories.map(cat => {
+        const annualBags = benchmark.bagsPerMonthPerCat * 12;
+        const ghsVal = annualBags * PRODUCT_SPECS[cat].sellingPrice;
+        return currentCurrency === 'USD' ? ghsVal / USD_TO_GHS : ghsVal;
+      });
+
+      // Sum actual sales logged per category
+      const actualData = categories.map(cat => {
+        const sumGHS = appData.sales
+          .filter(s => s.category === cat)
+          .reduce((sum, s) => sum + s.total, 0);
+        return currentCurrency === 'USD' ? sumGHS / USD_TO_GHS : sumGHS;
+      });
+
+      // 1. Bar Chart: Forecast vs Actual
+      const ctxSales = document.getElementById('categorySalesChart').getContext('2d');
+      if (salesChartInstance) salesChartInstance.destroy();
+      salesChartInstance = new Chart(ctxSales, {
+        type: 'bar',
+        data: {
+          labels: categories,
+          datasets: [
+            {
+              label: `Forecast Benchmark (${currentCurrency})`,
+              data: forecastData,
+              backgroundColor: 'rgba(245, 158, 11, 0.4)',
+              borderColor: 'rgba(245, 158, 11, 1)',
+              borderWidth: 1.5,
+              borderRadius: 6
+            },
+            {
+              label: `Actual Logged Sales (${currentCurrency})`,
+              data: actualData,
+              backgroundColor: 'rgba(16, 185, 129, 0.7)',
+              borderColor: 'rgba(16, 185, 129, 1)',
+              borderWidth: 1.5,
+              borderRadius: 6
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: '#94a3b8', font: { size: 11 } } }
+          },
+          scales: {
+            y: {
+              grid: { color: 'rgba(51, 65, 85, 0.4)' },
+              ticks: { color: '#94a3b8', callback: v => (currentCurrency === 'USD' ? '$' : '₵') + v.toLocaleString() }
+            },
+            x: {
+              grid: { display: false },
+              ticks: { color: '#94a3b8' }
+            }
+          }
+        }
+      });
+
+      // 2. Doughnut Chart: Overhead Spends Breakdown
+      const spendLabels = ['Transportation spend', 'Delivery spend', 'Physical security spend', 'IT maintenance spend'];
+      const spendVals = spendLabels.map(cat => {
+        const val = appData.spends[cat] || 0;
+        return currentCurrency === 'USD' ? val / USD_TO_GHS : val;
+      });
+
+      const ctxSpend = document.getElementById('spendsDoughnutChart').getContext('2d');
+      if (spendsChartInstance) spendsChartInstance.destroy();
+      spendsChartInstance = new Chart(ctxSpend, {
+        type: 'doughnut',
+        data: {
+          labels: ['Transport', 'Delivery', 'Security', 'IT Maint.'],
+          datasets: [{
+            data: spendVals,
+            backgroundColor: ['#38bdf8', '#818cf8', '#f43f5e', '#fbbf24'],
+            borderColor: '#0f172a',
+            borderWidth: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 10 } } }
+          },
+          cutout: '65%'
+        }
+      });
+    }
+
+    function renderActivityLog() {
+      const tbody = document.getElementById('activity-log-body');
+      tbody.innerHTML = '';
+      
+      const allEvents = [
+        ...appData.sales.map(s => ({
+          time: s.timestamp,
+          type: 'Sale',
+          desc: `${s.customer} (${s.qty} bags)`,
+          category: s.category,
+          val: s.total,
+          positive: true
+        })),
+        ...Object.keys(appData.spends).map(k => ({
+          time: new Date().toISOString(),
+          type: 'Spend',
+          desc: 'Overhead allocation',
+          category: k,
+          val: appData.spends[k],
+          positive: false
+        }))
+      ].sort((a,b) => new Date(b.time) - new Date(a.time)).slice(0, 10);
+
+      allEvents.forEach(item => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="py-2.5 px-4 text-slate-400">${new Date(item.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+          <td class="py-2.5 px-4"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${item.positive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-sky-500/10 text-sky-400'}">${item.type}</span></td>
+          <td class="py-2.5 px-4 font-medium text-white">${item.desc}</td>
+          <td class="py-2.5 px-4 text-slate-400">${item.category}</td>
+          <td class="py-2.5 px-4 text-right font-bold ${item.positive ? 'text-emerald-400' : 'text-slate-200'}">${formatVal(item.val)}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    // 5. DATA ENTRY ACTIONS
+    function autoFillPrice() {
+      const cat = document.getElementById('sale-category').value;
+      const baseGHS = PRODUCT_SPECS[cat].sellingPrice;
+      const price = currentCurrency === 'USD' ? (baseGHS / USD_TO_GHS) : baseGHS;
+      document.getElementById('sale-price').value = price.toFixed(2);
+      calculateSaleTotal();
+    }
+
+    function calculateSaleTotal() {
+      const qty = parseFloat(document.getElementById('sale-qty').value) || 0;
+      const price = parseFloat(document.getElementById('sale-price').value) || 0;
+      const lineVal = qty * price;
+      const symbol = currentCurrency === 'USD' ? '$' : '₵';
+      document.getElementById('sale-total-preview').textContent = `${symbol}${lineVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+
+    function handleSaleSubmit(e) {
+      e.preventDefault();
+      const customer = document.getElementById('sale-customer').value;
+      const isNew = document.getElementById('sale-is-new').value === 'true';
+      const category = document.getElementById('sale-category').value;
+      const qty = parseFloat(document.getElementById('sale-qty').value);
+      const inputPrice = parseFloat(document.getElementById('sale-price').value);
+
+      // Normalize internal value to GHS
+      const priceGHS = currentCurrency === 'USD' ? inputPrice * USD_TO_GHS : inputPrice;
+      const totalGHS = qty * priceGHS;
+
+      const newSale = {
+        id: 's_' + Date.now(),
+        timestamp: new Date().toISOString(),
+        customer,
+        isNew,
+        category,
+        qty,
+        unitPrice: priceGHS,
+        total: totalGHS
+      };
+
+      appData.sales.unshift(newSale);
+      persistState();
+      refreshDashboard();
+
+      document.getElementById('sale-customer').value = '';
+      document.getElementById('sale-qty').value = '10';
+      autoFillPrice();
+    }
+
+    function handleSpendSubmit(e) {
+      e.preventDefault();
+      const category = document.getElementById('spend-category').value;
+      const inputAmt = parseFloat(document.getElementById('spend-amount').value);
+      const amtGHS = currentCurrency === 'USD' ? inputAmt * USD_TO_GHS : inputAmt;
+
+      appData.spends[category] = (appData.spends[category] || 0) + amtGHS;
+      persistState();
+      refreshDashboard();
+
+      document.getElementById('spend-amount').value = '';
+      document.getElementById('spend-notes').value = '';
+    }
+
+    function clearDemoData() {
+      if (confirm('Reset actual sales and spends log?')) {
+        appData.sales = [];
+        appData.spends = {
+          'Transportation spend': 0,
+          'Delivery spend': 0,
+          'Physical security spend': 0,
+          'IT maintenance spend': 0
+        };
+        persistState();
+        refreshDashboard();
+      }
+    }
+
+    // 6. COLLABORATION (FIREBASE REALTIME DB OR LOCAL STORAGE)
+    function initFirebase() {
+      const savedConfig = localStorage.getItem('bh_feed_firebase_config');
+      if (savedConfig) {
+        try {
+          const cfg = JSON.parse(savedConfig);
+          if (!firebase.apps.length) {
+            firebase.initializeApp(cfg);
+          }
+          fbDb = firebase.database();
+          document.getElementById('sync-text').textContent = 'Cloud Synced';
+          
+          // Listen for remote changes
+          fbDb.ref('beehive_feed_dashboard').on('value', snapshot => {
+            const data = snapshot.val();
+            if (data) {
+              appData = data;
+              refreshDashboard();
+            }
+          });
+        } catch (err) {
+          console.warn('Firebase init fallback:', err);
+        }
+      }
+    }
+
+    function persistState() {
+      localStorage.setItem('bh_feed_app_data', JSON.stringify(appData));
+      if (fbDb) {
+        fbDb.ref('beehive_feed_dashboard').set(appData);
+      }
+    }
+
+    function loadLocalState() {
+      const local = localStorage.getItem('bh_feed_app_data');
+      if (local && !fbDb) {
+        try {
+          appData = JSON.parse(local);
+        } catch (e) {}
+      }
+    }
+
+    function toggleModal(id) {
+      document.getElementById(id).classList.toggle('hidden');
+    }
+
+    function saveFirebaseConfig() {
+      const raw = document.getElementById('fb-config-input').value;
+      try {
+        JSON.parse(raw);
+        localStorage.setItem('bh_feed_firebase_config', raw);
+        alert('Configuration saved! Refreshing...');
+        window.location.reload();
+      } catch (err) {
+        alert('Invalid JSON configuration.');
+      }
+    }
+  </script>
+</body>
+</html>
